@@ -4,7 +4,7 @@ import json
 
 from astrbot.api import logger, star
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+from astrbot.core.star.star_tools import StarTools
 
 from .core.prompts import (
     LANG_NAMES,
@@ -44,7 +44,7 @@ class ForeignLanguageHelper(star.Star):
         else:
             self.custom_scenes = custom_scenes_raw if isinstance(custom_scenes_raw, list) else []
 
-        data_dir = str(get_astrbot_data_path())
+        data_dir = str(StarTools.get_data_dir())
         self.session_mgr = SessionManager(
             data_dir=data_dir,
             max_history_rounds=self.max_history_rounds,
