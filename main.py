@@ -6,12 +6,12 @@ from astrbot.api import logger, star
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-from core.prompts import (
+from .core.prompts import (
     LANG_NAMES,
     SCENE_DISPLAY_NAMES,
     build_system_prompt,
 )
-from core.session import SessionManager
+from .core.session import SessionManager
 
 # 支持的语种
 SUPPORTED_LANGUAGES = {"english", "japanese"}
