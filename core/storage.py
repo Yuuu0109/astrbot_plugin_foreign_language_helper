@@ -1,0 +1,34 @@
+"""JSON 持久化存储"""
+
+import json
+import os
+from pathlib import Path
+from astrbot.api import logger
+
+
+class JsonStorage:
+    """简单的 JSON 文件持久化存储"""
+
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+        self._ensure_dir()
+
+    def _ensure_dir(self):
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+
+    def load(self) -> dict:
+        if not os.path.exists(self.file_path):
+            return {}
+        try:
+            with open(self.file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.error(f"Failed to load storage file {self.file_path}: {e}")
+            return {}
+
+    def save(self, data: dict):
+        try:
+            with open(self.file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except IOError as e:
+            logger.error(f"Failed to save storage file {self.file_path}: {e}")

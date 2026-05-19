@@ -1,0 +1,38 @@
+{
+    "default_language": {
+        "description": "默认目标语种",
+        "type": "string",
+        "default": "english",
+        "options": ["english", "japanese"]
+    },
+    "default_scene": {
+        "description": "默认对话场景",
+        "type": "string",
+        "default": "daily",
+        "options": ["daily", "restaurant", "airport", "shopping", "interview", "business"]
+    },
+    "max_history_rounds": {
+        "description": "最大对话历史轮数（每轮包含一条用户消息和一条AI回复）",
+        "type": "int",
+        "default": 10,
+        "hint": "范围 1-50"
+    },
+    "correction_level": {
+        "description": "纠错等级：off=不纠错，light=轻度纠错，strict=严格纠错",
+        "type": "string",
+        "default": "light",
+        "options": ["off", "light", "strict"]
+    },
+    "difficulty": {
+        "description": "难度等级：beginner=初级，intermediate=中级，advanced=高级",
+        "type": "string",
+        "default": "intermediate",
+        "options": ["beginner", "intermediate", "advanced"]
+    },
+    "custom_scenes": {
+        "description": "自定义场景（JSON格式）。格式: [{\"name\":\"场景名\",\"display_name\":\"显示名\",\"prompt\":\"提示词\"}]",
+        "type": "text",
+        "default": "[]",
+        "hint": "JSON 数组格式，每项包含 name、display_name、prompt 三个字段"
+    }
+}
