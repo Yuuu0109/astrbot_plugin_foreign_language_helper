@@ -3,7 +3,7 @@
         "description": "默认目标语种",
         "type": "string",
         "default": "english",
-        "options": ["english", "japanese"]
+        "options": ["english", "japanese", "英语", "日语"]
     },
     "default_scene": {
         "description": "默认对话场景",

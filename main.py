@@ -13,8 +13,18 @@ from .core.prompts import (
 )
 from .core.session import SessionManager
 
-# 支持的语种
-SUPPORTED_LANGUAGES = {"english", "japanese"}
+# 语种别名映射（支持中文/英文输入 -> 内部 key）
+LANG_ALIASES = {
+    "english": "english",
+    "japanese": "japanese",
+    "英语": "english",
+    "日语": "japanese",
+}
+
+
+def _resolve_language(raw: str) -> str | None:
+    """将用户输入的语种名称解析为内部 key，未匹配返回 None。"""
+    return LANG_ALIASES.get(raw.lower())
 
 
 class ForeignLanguageHelper(star.Star):
@@ -27,7 +37,7 @@ class ForeignLanguageHelper(star.Star):
 
     async def initialize(self):
         cfg = self._plugin_config
-        self.default_language = cfg.get("default_language", "english")
+        self.default_language = _resolve_language(cfg.get("default_language", "english")) or "english"
         self.default_scene = cfg.get("default_scene", "daily")
         self.max_history_rounds = cfg.get("max_history_rounds", 10)
         self.correction_level = cfg.get("correction_level", "light")
@@ -72,25 +82,24 @@ class ForeignLanguageHelper(star.Star):
     @lang.command("start")
     async def lang_start(self, event: AstrMessageEvent):
         """开始口语练习会话。用法: /lang start [语种] [场景]
-        示例: /lang start english restaurant"""
+        示例: /lang start 英语 在咖啡馆和朋友聊天"""
         args = event.message_str.strip().split()
         parts = args[2:] if len(args) >= 2 else []
 
-        language = parts[0].lower() if len(parts) >= 1 else self.default_language
-        scene = parts[1].lower() if len(parts) >= 2 else self.default_scene
+        if len(parts) >= 1:
+            language = _resolve_language(parts[0])
+            if language is None:
+                # 第一个参数不是语种，视为场景描述
+                language = self.default_language
+                scene = " ".join(parts)
+            else:
+                scene = " ".join(parts[1:]) if len(parts) >= 2 else self.default_scene
+        else:
+            language = self.default_language
+            scene = self.default_scene
 
-        if language not in SUPPORTED_LANGUAGES:
-            yield event.plain_result(
-                f"不支持的语种: {language}\n支持: {', '.join(SUPPORTED_LANGUAGES)}"
-            )
-            return
-
-        available_scenes = self._get_available_scenes()
-        if scene not in available_scenes:
-            yield event.plain_result(
-                f"不存在的场景: {scene}\n可用场景: {', '.join(available_scenes)}"
-            )
-            return
+        if not scene:
+            scene = self.default_scene
 
         user_id = event.get_sender_id()
         self.session_mgr.start_session(user_id, language, scene)
@@ -127,14 +136,14 @@ class ForeignLanguageHelper(star.Star):
 
         if not parts:
             yield event.plain_result(
-                f"用法: /lang lang <语种>\n支持: {', '.join(SUPPORTED_LANGUAGES)}"
+                f"用法: /lang lang <语种>\n支持: {', '.join(LANG_ALIASES.keys())}"
             )
             return
 
-        language = parts[0].lower()
-        if language not in SUPPORTED_LANGUAGES:
+        language = _resolve_language(parts[0])
+        if language is None:
             yield event.plain_result(
-                f"不支持的语种: {language}\n支持: {', '.join(SUPPORTED_LANGUAGES)}"
+                f"不支持的语种: {parts[0]}\n支持: {', '.join(LANG_ALIASES.keys())}"
             )
             return
 
@@ -151,24 +160,18 @@ class ForeignLanguageHelper(star.Star):
     # ---- /lang scene ----
     @lang.command("scene")
     async def lang_scene(self, event: AstrMessageEvent):
-        """切换对话场景。用法: /lang scene <场景>"""
+        """切换对话场景。用法: /lang scene <场景描述>"""
         args = event.message_str.strip().split()
         parts = args[2:] if len(args) >= 2 else []
 
         if not parts:
             available = self._get_available_scenes()
             yield event.plain_result(
-                f"用法: /lang scene <场景>\n可用场景: {', '.join(available)}"
+                f"用法: /lang scene <场景描述>\n内置场景: {', '.join(available)}\n也可输入任意场景描述，如: /lang scene 在咖啡馆和朋友聊天"
             )
             return
 
-        scene = parts[0].lower()
-        available = self._get_available_scenes()
-        if scene not in available:
-            yield event.plain_result(
-                f"不存在的场景: {scene}\n可用场景: {', '.join(available)}"
-            )
-            return
+        scene = " ".join(parts)
 
         user_id = event.get_sender_id()
         session = self.session_mgr.get_session(user_id)
@@ -188,24 +191,17 @@ class ForeignLanguageHelper(star.Star):
         parts = args[2:] if len(args) >= 2 else []
 
         if len(parts) < 2:
-            yield event.plain_result("用法: /lang switch <语种> <场景>\n示例: /lang switch japanese daily")
+            yield event.plain_result("用法: /lang switch <语种> <场景描述>\n示例: /lang switch 日语 在居酒屋点餐")
             return
 
-        language = parts[0].lower()
-        scene = parts[1].lower()
-
-        if language not in SUPPORTED_LANGUAGES:
+        language = _resolve_language(parts[0])
+        if language is None:
             yield event.plain_result(
-                f"不支持的语种: {language}\n支持: {', '.join(SUPPORTED_LANGUAGES)}"
+                f"不支持的语种: {parts[0]}\n支持: {', '.join(LANG_ALIASES.keys())}"
             )
             return
 
-        available = self._get_available_scenes()
-        if scene not in available:
-            yield event.plain_result(
-                f"不存在的场景: {scene}\n可用场景: {', '.join(available)}"
-            )
-            return
+        scene = " ".join(parts[1:])
 
         user_id = event.get_sender_id()
         session = self.session_mgr.get_session(user_id)
@@ -228,7 +224,9 @@ class ForeignLanguageHelper(star.Star):
         """查看可用的语种和场景列表"""
         lines = ["可用语种:"]
         for lang_key, lang_name in LANG_NAMES.items():
-            lines.append(f"  {lang_key} - {lang_name}")
+            cn_alias = [k for k, v in LANG_ALIASES.items() if v == lang_key and k != lang_key]
+            alias_str = f" / {'、'.join(cn_alias)}" if cn_alias else ""
+            lines.append(f"  {lang_key}{alias_str} - {lang_name}")
 
         lines.append("\n内置场景:")
         for scene_key, display_name in SCENE_DISPLAY_NAMES.items():
@@ -238,6 +236,8 @@ class ForeignLanguageHelper(star.Star):
             lines.append("\n自定义场景:")
             for name, info in self._custom_scene_map.items():
                 lines.append(f"  {name} - {info['display_name']}")
+
+        lines.append("\n也可输入任意场景描述，如: /lang start 英语 在咖啡馆和朋友聊天")
 
         yield event.plain_result("\n".join(lines))
 
@@ -254,10 +254,12 @@ class ForeignLanguageHelper(star.Star):
         lang_display = LANG_NAMES.get(session.language, session.language)
         scene_display = self._get_scene_display_name(session.scene)
         history_count = len(session.history)
+        bilingual_text = "开启" if session.bilingual else "关闭"
         yield event.plain_result(
             f"练习状态:\n"
             f"  语种: {lang_display}\n"
             f"  场景: {scene_display}\n"
+            f"  双语模式: {bilingual_text}\n"
             f"  历史消息: {history_count} 条\n"
             f"  难度: {self.difficulty}\n"
             f"  纠错: {self.correction_level}"
@@ -275,6 +277,19 @@ class ForeignLanguageHelper(star.Star):
         self.session_mgr.reset_history(user_id)
         yield event.plain_result("对话历史已重置，可以继续练习。")
 
+    # ---- /lang bilingual ----
+    @lang.command("bilingual")
+    async def lang_bilingual(self, event: AstrMessageEvent):
+        """切换双语回复模式（AI 同时用目标语种和中文回复）"""
+        user_id = event.get_sender_id()
+        session = self.session_mgr.get_session(user_id)
+        if not session.active:
+            yield event.plain_result("请先使用 /lang start 开始练习。")
+            return
+        new_state = self.session_mgr.toggle_bilingual(user_id)
+        state_text = "开启" if new_state else "关闭"
+        yield event.plain_result(f"双语回复模式已{state_text}。")
+
     # ---- /lang help ----
     @lang.command("help")
     async def lang_help(self, event: AstrMessageEvent):
@@ -287,11 +302,15 @@ class ForeignLanguageHelper(star.Star):
             "/lang lang <语种> - 切换语种\n"
             "/lang scene <场景> - 切换场景\n"
             "/lang switch <语种> <场景> - 同时切换\n"
+            "/lang bilingual - 切换双语回复模式\n"
             "/lang list - 查看可用语种和场景\n"
             "/lang status - 查看当前状态\n"
             "/lang reset - 重置对话历史\n"
             "/lang help - 查看本帮助\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "语种支持: english/英语, japanese/日语\n"
+            "场景可使用内置名称或自由描述，如:\n"
+            "  /lang start 英语 在咖啡馆和朋友聊天\n"
             "开始练习后，直接发送消息即可对话。\n"
             "支持用中文或目标语种输入。\n"
             "用中文输入时，AI 会先翻译再回复。"
@@ -329,6 +348,7 @@ class ForeignLanguageHelper(star.Star):
                 difficulty=self.difficulty,
                 correction_level=self.correction_level,
                 custom_prompt=custom_prompt,
+                bilingual=session.bilingual,
             )
 
             # 构建对话上下文

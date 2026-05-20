@@ -68,15 +68,17 @@ def build_system_prompt(
     difficulty: str = "intermediate",
     correction_level: str = "light",
     custom_prompt: str | None = None,
+    bilingual: bool = False,
 ) -> str:
     """构建完整的 system prompt。
 
     Args:
         language: 目标语种 ("english" / "japanese")
-        scene: 场景标识 ("daily" / "restaurant" / ... 或自定义场景名)
+        scene: 场景标识 ("daily" / "restaurant" / ... 或自由场景描述)
         difficulty: 难度等级 ("beginner" / "intermediate" / "advanced")
         correction_level: 纠错等级 ("off" / "light" / "strict")
         custom_prompt: 自定义场景的提示词（若有则直接使用）
+        bilingual: 是否启用双语回复模式
 
     Returns:
         完整的 system prompt 字符串
@@ -87,12 +89,12 @@ def build_system_prompt(
     elif scene in SCENES and language in SCENES[scene]:
         persona = SCENES[scene][language]
     else:
-        # fallback: 通用对话场景
-        lang_name = LANG_NAMES.get(language, language)
+        # 自由场景描述：将用户的 scene 文本作为场景说明
         persona = (
-            f"You are a friendly native {lang_name} speaker having a casual "
-            f"conversation with someone learning {lang_name}. "
-            f"Keep the conversation natural and engaging."
+            f"You are a native language partner helping a learner practice {LANG_NAMES.get(language, language)}. "
+            f"The scenario is: \"{scene}\". "
+            f"Set up an appropriate role for this scenario and engage the learner in conversation. "
+            f"Keep the tone natural and fitting for the described situation."
         )
 
     # 难度描述
@@ -114,6 +116,17 @@ def build_system_prompt(
     }
     correction_desc = correction_map.get(correction_level, correction_map["light"])
 
+    bilingual_rules = ""
+    if bilingual:
+        bilingual_rules = """
+
+【Bilingual Mode / 双语模式】
+每次回复时，先用目标语种回答，然后紧跟中文翻译。
+格式:
+<目标语种回复>
+---
+📝 中文翻译: <中文翻译>"""
+
     return f"""{persona}
 
 【Difficulty Level】
@@ -123,6 +136,7 @@ def build_system_prompt(
 
 【Correction Policy】
 {correction_desc}
+{bilingual_rules}
 
 【General Rules】
 - Stay in character throughout the conversation.

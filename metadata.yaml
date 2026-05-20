@@ -1,6 +1,6 @@
 name: astrbot_plugin_foreign_language_helper
 display_name: 外语口语助手
-desc: 通过大模型进行外语口语练习，支持多场景切换，支持英语和日语。
-version: v1.0.2
+desc: 通过大模型进行外语口语练习，支持多场景切换、自由场景描述、双语回复模式，支持英语和日语。
+version: v1.1.0
 author: Yuuu0109
 repo: https://github.com/Yuuu0109/astrbot_plugin_foreign_language_helper

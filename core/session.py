@@ -13,6 +13,7 @@ class Session:
     active: bool = False
     language: str = "english"
     scene: str = "daily"
+    bilingual: bool = False
     history: list[dict] = field(default_factory=list)  # [{"role": ..., "content": ...}, ...]
 
     def to_dict(self) -> dict:
@@ -20,6 +21,7 @@ class Session:
             "active": self.active,
             "language": self.language,
             "scene": self.scene,
+            "bilingual": self.bilingual,
             "history": self.history,
         }
 
@@ -29,6 +31,7 @@ class Session:
             active=data.get("active", False),
             language=data.get("language", "english"),
             scene=data.get("scene", "daily"),
+            bilingual=data.get("bilingual", False),
             history=data.get("history", []),
         )
 
@@ -91,6 +94,12 @@ class SessionManager:
         session.history = []
         self._save()
         return session
+
+    def toggle_bilingual(self, user_id: str) -> bool:
+        session = self.get_session(user_id)
+        session.bilingual = not session.bilingual
+        self._save()
+        return session.bilingual
 
     def add_message(self, user_id: str, role: str, content: str):
         session = self.get_session(user_id)
