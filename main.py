@@ -405,7 +405,11 @@ class ForeignLanguageHelper(star.Star):
                         umo=event.unified_msg_origin
                     )
                     if tts_provider:
-                        audio_path = await tts_provider.get_audio(reply_text)
+                        # 提取外语文本用于 TTS（双语模式下只取外语部分）
+                        tts_text = reply_text
+                        if session.bilingual and "---" in reply_text:
+                            tts_text = reply_text.split("---")[0].strip()
+                        audio_path = await tts_provider.get_audio(tts_text)
                         if audio_path:
                             yield event.chain_result([Record.fromFileSystem(audio_path)])
                         else:
