@@ -351,9 +351,9 @@ class ForeignLanguageHelper(star.Star):
         if not session.active:
             return  # 不拦截，交给后续处理器
 
-        # 跳过以 / 开头的指令消息
+        # 跳过命令消息（以 / 开头或是唤醒命令）
         msg = event.message_str.strip()
-        if msg.startswith("/"):
+        if msg.startswith("/") or event.is_at_or_wake_command:
             return
 
         # 阻断事件传播（不让 AstrBot 默认 LLM 处理）
