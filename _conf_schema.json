@@ -34,5 +34,10 @@
         "type": "text",
         "default": "[]",
         "hint": "JSON 数组格式，每项包含 name、display_name、prompt 三个字段"
+    },
+    "enable_voice": {
+        "description": "是否默认启用语音回复（需要 AstrBot 已配置 TTS Provider，用户可通过 /lang voice 命令动态切换）",
+        "type": "bool",
+        "default": false
     }
 }

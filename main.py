@@ -42,6 +42,7 @@ class ForeignLanguageHelper(star.Star):
         self.max_history_rounds = cfg.get("max_history_rounds", 10)
         self.correction_level = cfg.get("correction_level", "light")
         self.difficulty = cfg.get("difficulty", "intermediate")
+        self.default_voice = cfg.get("enable_voice", False)
 
         # custom_scenes 存储为 JSON 字符串
         custom_scenes_raw = cfg.get("custom_scenes", "[]")
@@ -103,6 +104,10 @@ class ForeignLanguageHelper(star.Star):
 
         user_id = event.get_sender_id()
         self.session_mgr.start_session(user_id, language, scene)
+        # 设置默认语音状态
+        session = self.session_mgr.get_session(user_id)
+        session.voice = self.default_voice
+        self.session_mgr._save()
 
         lang_display = LANG_NAMES.get(language, language)
         scene_display = self._get_scene_display_name(scene)
@@ -255,11 +260,13 @@ class ForeignLanguageHelper(star.Star):
         scene_display = self._get_scene_display_name(session.scene)
         history_count = len(session.history)
         bilingual_text = "开启" if session.bilingual else "关闭"
+        voice_text = "开启" if session.voice else "关闭"
         yield event.plain_result(
             f"练习状态:\n"
             f"  语种: {lang_display}\n"
             f"  场景: {scene_display}\n"
             f"  双语模式: {bilingual_text}\n"
+            f"  语音模式: {voice_text}\n"
             f"  历史消息: {history_count} 条\n"
             f"  难度: {self.difficulty}\n"
             f"  纠错: {self.correction_level}"
@@ -290,6 +297,19 @@ class ForeignLanguageHelper(star.Star):
         state_text = "开启" if new_state else "关闭"
         yield event.plain_result(f"双语回复模式已{state_text}。")
 
+    # ---- /lang voice ----
+    @lang.command("voice")
+    async def lang_voice(self, event: AstrMessageEvent):
+        """切换语音回复模式（AI 同时发送语音和文本回复）"""
+        user_id = event.get_sender_id()
+        session = self.session_mgr.get_session(user_id)
+        if not session.active:
+            yield event.plain_result("请先使用 /lang start 开始练习。")
+            return
+        new_state = self.session_mgr.toggle_voice(user_id)
+        state_text = "开启" if new_state else "关闭"
+        yield event.plain_result(f"语音回复模式已{state_text}。")
+
     # ---- /lang help ----
     @lang.command("help")
     async def lang_help(self, event: AstrMessageEvent):
@@ -303,6 +323,7 @@ class ForeignLanguageHelper(star.Star):
             "/lang scene <场景> - 切换场景\n"
             "/lang switch <语种> <场景> - 同时切换\n"
             "/lang bilingual - 切换双语回复模式\n"
+            "/lang voice - 切换语音回复模式\n"
             "/lang list - 查看可用语种和场景\n"
             "/lang status - 查看当前状态\n"
             "/lang reset - 重置对话历史\n"
@@ -313,7 +334,8 @@ class ForeignLanguageHelper(star.Star):
             "  /lang start 英语 在咖啡馆和朋友聊天\n"
             "开始练习后，直接发送消息即可对话。\n"
             "支持用中文或目标语种输入。\n"
-            "用中文输入时，AI 会先翻译再回复。"
+            "用中文输入时，AI 会先翻译再回复。\n"
+            "语音功能需要在 AstrBot 中配置 TTS Provider。"
         )
         yield event.plain_result(help_text)
 
@@ -375,6 +397,27 @@ class ForeignLanguageHelper(star.Star):
             self.session_mgr.add_message(user_id, "user", msg)
             self.session_mgr.add_message(user_id, "assistant", reply_text)
 
+            # 如果启用语音，先发送语音消息
+            if session.voice:
+                try:
+                    tts_provider = self.context.get_using_tts_provider(
+                        umo=event.unified_msg_origin
+                    )
+                    if tts_provider:
+                        audio_path = await tts_provider.get_audio(reply_text)
+                        if audio_path:
+                            yield event.record_result(audio_path)
+                        else:
+                            lang_display = LANG_NAMES.get(session.language, session.language)
+                            yield event.plain_result(f"[提示] TTS 未能生成 {lang_display} 语音，可能不支持该语种的语音合成")
+                    else:
+                        logger.warning("语音模式已开启但未找到 TTS Provider，仅发送文本")
+                except Exception as e:
+                    lang_display = LANG_NAMES.get(session.language, session.language)
+                    logger.warning(f"语音生成失败: {e}")
+                    yield event.plain_result(f"[提示] {lang_display} 语音生成失败: {e!s}")
+
+            # 语音 + 文本双输出
             yield event.plain_result(reply_text)
 
         except Exception as e:
