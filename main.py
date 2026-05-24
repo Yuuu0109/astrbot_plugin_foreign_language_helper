@@ -4,6 +4,7 @@ import json
 
 from astrbot.api import logger, star
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.core.message.components import Record
 from astrbot.core.star.star_tools import StarTools
 
 from .core.prompts import (
@@ -406,7 +407,7 @@ class ForeignLanguageHelper(star.Star):
                     if tts_provider:
                         audio_path = await tts_provider.get_audio(reply_text)
                         if audio_path:
-                            yield event.record_result(audio_path)
+                            yield event.chain_result([Record.fromFileSystem(audio_path)])
                         else:
                             lang_display = LANG_NAMES.get(session.language, session.language)
                             yield event.plain_result(f"[提示] TTS 未能生成 {lang_display} 语音，可能不支持该语种的语音合成")
