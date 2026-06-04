@@ -62,6 +62,29 @@ LANG_RULES_JAPANESE = """【Language Handling Rules / 言語処理ルール】
    - 漢字のみで、ひらがな・カタカナが一切含まれない場合は中国語と判断してください。"""
 
 
+def extract_target_language_text(text: str) -> str:
+    """从 AI 回复中提取目标语种正文，剥离翻译参考/纠错/讲解块，用于 TTS 朗读。
+
+    规则:
+    - 遇到 "---" 分隔行（双语模式分隔符）后的内容全部丢弃。
+    - 遇到以 "💡"（讲解）开头的行后的内容全部丢弃（通常位于末尾，且为中文）。
+    - 跳过以 "🌐"（翻译参考）、"📝"（纠错/翻译）开头的行。
+    若过滤后为空，则回退为原文，避免 TTS 无内容。
+    """
+    lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("---") or stripped.startswith("💡"):
+            break
+        if stripped.startswith(("🌐", "📝")):
+            continue
+        lines.append(stripped)
+    result = "\n".join(lines).strip()
+    return result or text.strip()
+
+
 def build_system_prompt(
     language: str,
     scene: str,
@@ -122,6 +145,7 @@ def build_system_prompt(
 
 【Bilingual Mode / 双语模式】
 每次回复时，先用目标语种回答，然后紧跟中文翻译。
+本模式下不要再附加 🌐 翻译参考、📝 Correction、💡 讲解 等额外块。
 格式:
 <目标语种回复>
 ---

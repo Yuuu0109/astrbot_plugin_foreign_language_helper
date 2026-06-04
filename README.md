@@ -9,6 +9,8 @@
 - 支持自定义场景（在 WebUI 配置中添加）
 - 支持用 **中文** 或 **目标语种** 输入
 - 中文输入时，AI 会先翻译成目标语种再回复
+- 支持 **双语回复模式**（AI 同时用目标语种和中文回复）
+- 支持 **语音回复模式**（AI 同时发送语音和文本，仅朗读外语正文，需配置 TTS Provider）
 - 可配置难度等级、纠错等级、历史轮数等参数
 - 对话历史持久化存储
 
@@ -23,6 +25,8 @@
 | `/lang lang <语种>` | 切换目标语种 |
 | `/lang scene <场景>` | 切换对话场景 |
 | `/lang switch <语种> <场景>` | 同时切换语种和场景 |
+| `/lang bilingual` | 切换双语回复模式 |
+| `/lang voice` | 切换语音回复模式 |
 | `/lang list` | 查看可用语种和场景 |
 | `/lang status` | 查看当前练习状态 |
 | `/lang reset` | 重置对话历史 |
@@ -46,7 +50,8 @@
 | `max_history_rounds` | int | 10 | 最大对话历史轮数 |
 | `correction_level` | string | light | 纠错等级 (off/light/strict) |
 | `difficulty` | string | intermediate | 难度等级 (beginner/intermediate/advanced) |
-| `custom_scenes` | list | [] | 自定义场景列表 |
+| `custom_scenes` | text | [] | 自定义场景（JSON 数组字符串） |
+| `enable_voice` | bool | false | 是否默认启用语音回复（需配置 TTS Provider） |
 
 ## 依赖
 

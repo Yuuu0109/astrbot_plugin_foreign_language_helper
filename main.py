@@ -11,6 +11,7 @@ from .core.prompts import (
     LANG_NAMES,
     SCENE_DISPLAY_NAMES,
     build_system_prompt,
+    extract_target_language_text,
 )
 from .core.session import SessionManager
 
@@ -40,7 +41,11 @@ class ForeignLanguageHelper(star.Star):
         cfg = self._plugin_config
         self.default_language = _resolve_language(cfg.get("default_language", "english")) or "english"
         self.default_scene = cfg.get("default_scene", "daily")
-        self.max_history_rounds = cfg.get("max_history_rounds", 10)
+        # 夹取到 [1, 50]，避免 0/负数导致历史不截断
+        try:
+            self.max_history_rounds = max(1, min(50, int(cfg.get("max_history_rounds", 10))))
+        except (TypeError, ValueError):
+            self.max_history_rounds = 10
         self.correction_level = cfg.get("correction_level", "light")
         self.difficulty = cfg.get("difficulty", "intermediate")
         self.default_voice = cfg.get("enable_voice", False)
@@ -67,9 +72,12 @@ class ForeignLanguageHelper(star.Star):
         for cs in self.custom_scenes:
             name = cs.get("name", "").strip()
             if name:
+                prompt = cs.get("prompt", "")
+                if not prompt:
+                    logger.warning(f"自定义场景 '{name}' 缺少 prompt，将回退为通用场景描述")
                 self._custom_scene_map[name] = {
                     "display_name": cs.get("display_name", name),
-                    "prompt": cs.get("prompt", ""),
+                    "prompt": prompt,
                 }
 
         logger.info("外语口语助手插件已加载")
@@ -104,11 +112,7 @@ class ForeignLanguageHelper(star.Star):
             scene = self.default_scene
 
         user_id = event.get_sender_id()
-        self.session_mgr.start_session(user_id, language, scene)
-        # 设置默认语音状态
-        session = self.session_mgr.get_session(user_id)
-        session.voice = self.default_voice
-        self.session_mgr._save()
+        self.session_mgr.start_session(user_id, language, scene, voice=self.default_voice)
 
         lang_display = LANG_NAMES.get(language, language)
         scene_display = self._get_scene_display_name(scene)
@@ -346,9 +350,9 @@ class ForeignLanguageHelper(star.Star):
     async def on_message(self, event: AstrMessageEvent):
         """拦截活跃会话用户的所有消息，转发给 LLM 处理"""
         user_id = event.get_sender_id()
-        session = self.session_mgr.get_session(user_id)
+        session = self.session_mgr.peek_session(user_id)
 
-        if not session.active:
+        if session is None or not session.active:
             return  # 不拦截，交给后续处理器
 
         # 跳过命令消息（以 / 开头或是唤醒命令）
@@ -405,10 +409,8 @@ class ForeignLanguageHelper(star.Star):
                         umo=event.unified_msg_origin
                     )
                     if tts_provider:
-                        # 提取外语文本用于 TTS（双语模式下只取外语部分）
-                        tts_text = reply_text
-                        if session.bilingual and "---" in reply_text:
-                            tts_text = reply_text.split("---")[0].strip()
+                        # 仅朗读目标语种正文，剥离翻译/纠错/讲解块
+                        tts_text = extract_target_language_text(reply_text)
                         audio_path = await tts_provider.get_audio(tts_text)
                         if audio_path:
                             yield event.chain_result([Record.fromFileSystem(audio_path)])
@@ -419,15 +421,15 @@ class ForeignLanguageHelper(star.Star):
                         logger.warning("语音模式已开启但未找到 TTS Provider，仅发送文本")
                 except Exception as e:
                     lang_display = LANG_NAMES.get(session.language, session.language)
-                    logger.warning(f"语音生成失败: {e}")
-                    yield event.plain_result(f"[提示] {lang_display} 语音生成失败: {e!s}")
+                    logger.warning(f"语音生成失败: {e}", exc_info=True)
+                    yield event.plain_result(f"[提示] {lang_display} 语音生成失败，已为你发送文本回复")
 
             # 语音 + 文本双输出
             yield event.plain_result(reply_text)
 
         except Exception as e:
             logger.error(f"外语口语助手 LLM 调用失败: {e}", exc_info=True)
-            yield event.plain_result(f"对话出错了: {e!s}")
+            yield event.plain_result("对话出错了，请稍后重试，或联系管理员检查 LLM Provider 配置。")
 
     # ==================== 辅助方法 ====================
 

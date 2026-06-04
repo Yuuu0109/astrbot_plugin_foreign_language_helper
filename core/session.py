@@ -44,7 +44,11 @@ class SessionManager:
 
     def __init__(self, data_dir: str, max_history_rounds: int = 10):
         self.storage = JsonStorage(str(Path(data_dir) / "sessions.json"))
-        self.max_history_rounds = max_history_rounds
+        # 防御性夹取，避免 0/负数导致 history[-0:] 不截断的隐患
+        try:
+            self.max_history_rounds = max(1, min(50, int(max_history_rounds)))
+        except (TypeError, ValueError):
+            self.max_history_rounds = 10
         self._sessions: dict[str, Session] = {}
         self._load()
 
@@ -62,11 +66,18 @@ class SessionManager:
             self._sessions[user_id] = Session()
         return self._sessions[user_id]
 
-    def start_session(self, user_id: str, language: str, scene: str) -> Session:
+    def peek_session(self, user_id: str) -> Session | None:
+        """只读获取会话，不存在时返回 None（不创建），用于高频消息路径。"""
+        return self._sessions.get(user_id)
+
+    def start_session(
+        self, user_id: str, language: str, scene: str, voice: bool = False
+    ) -> Session:
         session = self.get_session(user_id)
         session.active = True
         session.language = language
         session.scene = scene
+        session.voice = voice
         session.history = []
         self._save()
         return session
